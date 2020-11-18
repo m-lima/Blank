@@ -1,0 +1,19 @@
+[package]
+name = "blank"
+version = "0.1.0"
+authors = ["Marcelo Lima <marcelowind@gmail.com>"]
+description = "A blank screen for illumination"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+web-view = { version = "0.7" }
+
+[package.metadata.bundle]
+name = "Blank"
+identifier = "com.mflima.blank"
+icon = [ "res/icon*.png" ]
+version = "0.1.0"
+category = "public.app-category.utilities"
+short_description = "A blank screen for illumination"
