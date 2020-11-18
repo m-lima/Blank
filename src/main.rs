@@ -99,6 +99,8 @@ mod winit {
             .collect::<std::collections::HashMap<_, _>>();
 
         let mut current_modifiers = ModifiersState::default();
+        let mut released_w = true;
+        let mut released_q = true;
 
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Wait;
@@ -118,27 +120,39 @@ mod winit {
                         input:
                             KeyboardInput {
                                 virtual_keycode: Some(virtual_code),
-                                state: ElementState::Released,
+                                state,
                                 ..
                             },
                         ..
-                    } => match virtual_code {
-                        VirtualKeyCode::Escape => {
+                    } => match (virtual_code, state) {
+                        (VirtualKeyCode::Escape, ElementState::Released) => {
                             windows.remove(&window_id);
                             if windows.is_empty() {
                                 *control_flow = ControlFlow::Exit;
                             }
                         }
-                        VirtualKeyCode::W if current_modifiers == ModifiersState::LOGO => {
+                        (VirtualKeyCode::W, ElementState::Released) => {
+                            released_w = true;
+                        }
+                        (VirtualKeyCode::W, ElementState::Pressed)
+                            if released_w && current_modifiers == ModifiersState::LOGO =>
+                        {
+                            released_w = false;
                             windows.remove(&window_id);
                             if windows.is_empty() {
                                 *control_flow = ControlFlow::Exit;
                             }
                         }
-                        VirtualKeyCode::Q if current_modifiers == ModifiersState::LOGO => {
+                        (VirtualKeyCode::Q, ElementState::Released) => {
+                            released_q = true;
+                        }
+                        (VirtualKeyCode::Q, ElementState::Pressed)
+                            if released_q && current_modifiers == ModifiersState::LOGO =>
+                        {
+                            released_q = false;
                             *control_flow = ControlFlow::Exit;
                         }
-                        VirtualKeyCode::F => {
+                        (VirtualKeyCode::F, ElementState::Released) => {
                             if let Some(window) = windows.get(&window_id) {
                                 if window.fullscreen().is_some() {
                                     window.set_fullscreen(None);
