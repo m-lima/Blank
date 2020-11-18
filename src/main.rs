@@ -101,8 +101,22 @@ mod winit {
         let mut current_modifiers = ModifiersState::default();
         let mut released_w = true;
         let mut released_q = true;
+        let mut graceful = false;
 
         event_loop.run(move |event, _, control_flow| {
+            if *control_flow == ControlFlow::Exit {
+                if let Event::NewEvents(winit::event::StartCause::Poll) = event {
+                    if windows.is_empty() {
+                        if graceful {
+                            graceful = false;
+                        } else {
+                            panic!("Force exit");
+                        }
+                    } else {
+                        windows.clear();
+                    }
+                }
+            }
             *control_flow = ControlFlow::Wait;
 
             match event {
@@ -110,6 +124,7 @@ mod winit {
                     WindowEvent::CloseRequested => {
                         windows.remove(&window_id);
                         if windows.is_empty() {
+                            graceful = true;
                             *control_flow = ControlFlow::Exit;
                         }
                     }
@@ -128,6 +143,7 @@ mod winit {
                         (VirtualKeyCode::Escape, ElementState::Released) => {
                             windows.remove(&window_id);
                             if windows.is_empty() {
+                                graceful = true;
                                 *control_flow = ControlFlow::Exit;
                             }
                         }
@@ -140,6 +156,7 @@ mod winit {
                             released_w = false;
                             windows.remove(&window_id);
                             if windows.is_empty() {
+                                graceful = true;
                                 *control_flow = ControlFlow::Exit;
                             }
                         }
