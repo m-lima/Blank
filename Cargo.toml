@@ -14,6 +14,7 @@ orbtk = { version = "0.3.1-alpha3", optional = true }
 web-view = { version = "0.7", optional = true }
 winit = { version = "0.23", optional = true }
 cocoa = { version = "0.24", optional = true }
+temperagb = { path = "../temperagb" }
 
 [features]
 default = [ "win" ]

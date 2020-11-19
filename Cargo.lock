@@ -179,6 +179,7 @@ dependencies = [
  "druid",
  "glium",
  "orbtk",
+ "temperagb",
  "web-view",
  "winit",
 ]
@@ -2967,6 +2968,10 @@ name = "takeable-option"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36ae8932fcfea38b7d3883ae2ab357b0d57a02caaa18ebb4f5ece08beaec4aa0"
+
+[[package]]
+name = "temperagb"
+version = "0.1.0"
 
 [[package]]
 name = "tempfile"
