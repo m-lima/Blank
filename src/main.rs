@@ -29,7 +29,7 @@ mod orbtk {
             .window(|ctx| {
                 Window::new()
                     .title("Blank Screen - OrbTk")
-                    .background(Color::rgb(255, 255, 255))
+                    .background(Color::rgb(255, 204, 128))
                     .resizeable(true)
                     .size(1024.0, 768.0)
                     .build(ctx)
@@ -76,8 +76,8 @@ mod winit {
             cocoa::appkit::NSColor::colorWithRed_green_blue_alpha_(
                 cocoa::base::nil,
                 1.0,
-                1.0,
-                1.0,
+                0.8,
+                0.5,
                 1.0,
             )
         };
