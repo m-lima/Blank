@@ -1,3 +1,6 @@
+#![deny(warnings, clippy::pedantic)]
+#![warn(rust_2018_idioms)]
+
 use cocoa::appkit::{NSColor, NSWindow};
 use std::collections::HashMap;
 use winit::{
@@ -21,6 +24,9 @@ fn ns_color_from_temperature(temperature: u32, old_id: cocoa::base::id) -> cocoa
 }
 
 fn set_background_color(window: &Window, color: cocoa::base::id) {
+    // ALLOWED: cocoa crate exposes `*mut objc::runtime::Object`, therefore using cast would create
+    // a pointer to a pointer. Better to just allow it
+    #[allow(clippy::ptr_as_ptr)]
     let ns_window = window.ns_window() as cocoa::base::id;
     unsafe { ns_window.setBackgroundColor_(color) };
 }
@@ -30,7 +36,7 @@ fn choose_windows(event_loop: &EventLoop<()>, color: cocoa::base::id) -> HashMap
         let window = WindowBuilder::new()
             .with_title("Blank")
             .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
-            .build(&event_loop)
+            .build(event_loop)
             .unwrap();
         set_background_color(&window, color);
         (window.id(), window)
@@ -60,7 +66,7 @@ fn main() {
     let mut released_w = true;
     let mut released_q = true;
     let mut graceful = false;
-    let mut temperature = 3000;
+    let mut temperature = 4300;
     let mut color = ns_color_from_temperature(temperature, cocoa::base::nil);
 
     let event_loop = EventLoop::new();

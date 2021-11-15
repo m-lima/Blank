@@ -3,7 +3,7 @@ name = "blank"
 version = "0.1.0"
 authors = ["Marcelo Lima <marcelowind@gmail.com>"]
 description = "A blank screen for illumination"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 winit = "0.23"
