@@ -6,9 +6,9 @@ description = "A blank screen for illumination"
 edition = "2021"
 
 [dependencies]
-winit = "0.23"
-cocoa =  "0.24"
-temperagb = { path = "../temperagb" }
+cocoa = "0.24"
+tempergb = "0.1"
+winit = "0.26"
 
 [package.metadata.bundle]
 name = "Blank"

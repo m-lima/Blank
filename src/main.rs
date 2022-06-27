@@ -11,7 +11,7 @@ use winit::{
 };
 
 fn ns_color_from_temperature(temperature: u32, old_id: cocoa::base::id) -> cocoa::base::id {
-    let (r, g, b) = temperagb::rgb_from_temperature(temperature).into();
+    let (r, g, b) = tempergb::rgb_from_temperature(temperature).into();
     unsafe {
         NSColor::colorWithRed_green_blue_alpha_(
             old_id,
