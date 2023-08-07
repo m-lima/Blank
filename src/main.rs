@@ -73,6 +73,11 @@ fn main() {
 
     let mut windows = choose_windows(&event_loop, color);
 
+    nosleep::NoSleep::new()
+        .unwrap()
+        .start(nosleep::NoSleepType::PreventUserIdleDisplaySleep)
+        .unwrap();
+
     event_loop.run(move |event, _, control_flow| {
         if *control_flow == ControlFlow::Exit {
             if let Event::NewEvents(winit::event::StartCause::Poll) = event {
