@@ -5,7 +5,7 @@ use cocoa::appkit::{NSColor, NSWindow};
 use std::collections::HashMap;
 use winit::{
     event::{ElementState, Event, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     monitor::MonitorHandle,
     platform::macos::WindowExtMacOS,
     window::{Fullscreen, Window, WindowBuilder, WindowId},
@@ -19,7 +19,7 @@ fn set_background_color(window: &Window, color: &Color) {
     unsafe { ns_window.setBackgroundColor_(color.id()) };
 }
 
-fn list_monitors(event_loop: &EventLoop<()>) -> Vec<MonitorHandle> {
+fn list_monitors(event_loop: &EventLoopWindowTarget<()>) -> Vec<MonitorHandle> {
     let mut monitors = event_loop.available_monitors().collect::<Vec<_>>();
     if let Some(primary_monitor) = event_loop.primary_monitor() {
         if let Some(index) = monitors
@@ -34,7 +34,7 @@ fn list_monitors(event_loop: &EventLoop<()>) -> Vec<MonitorHandle> {
 }
 
 fn build_window(
-    event_loop: &EventLoop<()>,
+    event_loop: &EventLoopWindowTarget<()>,
     color: &Color,
     monitor: MonitorHandle,
 ) -> (WindowId, Window) {
@@ -48,7 +48,7 @@ fn build_window(
 }
 
 fn choose_windows(
-    event_loop: &EventLoop<()>,
+    event_loop: &EventLoopWindowTarget<()>,
     color: &Color,
     dark: bool,
 ) -> HashMap<WindowId, Window> {
@@ -65,6 +65,22 @@ fn choose_windows(
         .take(count)
         .map(|monitor| build_window(event_loop, color, monitor))
         .collect()
+}
+
+fn add_window(
+    event_loop: &EventLoopWindowTarget<()>,
+    color: &Color,
+    current_windows: &HashMap<WindowId, Window>,
+) -> Option<(WindowId, Window)> {
+    list_monitors(event_loop)
+        .into_iter()
+        .find(|monitor| {
+            current_windows
+                .values()
+                .filter_map(Window::current_monitor)
+                .all(|open| *monitor != open)
+        })
+        .map(|monitor| build_window(event_loop, color, monitor))
 }
 
 struct Color {
@@ -143,6 +159,7 @@ fn main() {
         }
     };
     let mut current_modifiers = ModifiersState::default();
+    let mut released_a = true;
     let mut released_w = true;
     let mut released_q = true;
     let mut graceful = false;
@@ -157,7 +174,7 @@ fn main() {
         .start(nosleep::NoSleepType::PreventUserIdleDisplaySleep)
         .unwrap();
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, event_loop, control_flow| {
         if *control_flow == ControlFlow::Exit {
             if let Event::NewEvents(winit::event::StartCause::Poll) = event {
                 if windows.is_empty() {
@@ -215,6 +232,17 @@ fn main() {
                         if windows.is_empty() {
                             graceful = true;
                             *control_flow = ControlFlow::Exit;
+                        }
+                    }
+                    (VirtualKeyCode::A, ElementState::Released) => {
+                        released_a = true;
+                    }
+                    (VirtualKeyCode::A, ElementState::Pressed)
+                        if released_a && current_modifiers == ModifiersState::LOGO =>
+                    {
+                        released_a = false;
+                        if let Some(window) = add_window(event_loop, &color, &windows) {
+                            windows.insert(window.0, window.1);
                         }
                     }
                     (VirtualKeyCode::W, ElementState::Released) => {
