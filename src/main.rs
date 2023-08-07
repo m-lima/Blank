@@ -6,72 +6,151 @@ use std::collections::HashMap;
 use winit::{
     event::{ElementState, Event, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    monitor::MonitorHandle,
     platform::macos::WindowExtMacOS,
     window::{Fullscreen, Window, WindowBuilder, WindowId},
 };
 
-fn ns_color_from_temperature(temperature: u32, old_id: cocoa::base::id) -> cocoa::base::id {
-    let (r, g, b) = tempergb::rgb_from_temperature(temperature).into();
-    unsafe {
-        NSColor::colorWithRed_green_blue_alpha_(
-            old_id,
-            f64::from(r) / 255.0,
-            f64::from(g) / 255.0,
-            f64::from(b) / 255.0,
-            1.0,
-        )
-    }
-}
-
-fn set_background_color(window: &Window, color: cocoa::base::id) {
+fn set_background_color(window: &Window, color: &Color) {
     // ALLOWED: cocoa crate exposes `*mut objc::runtime::Object`, therefore using cast would create
     // a pointer to a pointer. Better to just allow it
     #[allow(clippy::ptr_as_ptr)]
     let ns_window = window.ns_window() as cocoa::base::id;
-    unsafe { ns_window.setBackgroundColor_(color) };
+    unsafe { ns_window.setBackgroundColor_(color.id()) };
 }
 
-fn choose_windows(event_loop: &EventLoop<()>, color: cocoa::base::id) -> HashMap<WindowId, Window> {
-    let build_window = |monitor| {
-        let window = WindowBuilder::new()
-            .with_title("Blank")
-            .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
-            .build(event_loop)
-            .unwrap();
-        set_background_color(&window, color);
-        (window.id(), window)
+fn list_monitors(event_loop: &EventLoop<()>) -> Vec<MonitorHandle> {
+    let mut monitors = event_loop.available_monitors().collect::<Vec<_>>();
+    if let Some(primary_monitor) = event_loop.primary_monitor() {
+        if let Some(index) = monitors
+            .iter()
+            .position(|monitor| *monitor == primary_monitor)
+        {
+            let last = monitors.len() - 1;
+            monitors.swap(index, last);
+        }
+    }
+    monitors
+}
+
+fn build_window(
+    event_loop: &EventLoop<()>,
+    color: &Color,
+    monitor: MonitorHandle,
+) -> (WindowId, Window) {
+    let window = WindowBuilder::new()
+        .with_title("Blank")
+        .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
+        .build(event_loop)
+        .unwrap();
+    set_background_color(&window, color);
+    (window.id(), window)
+}
+
+fn choose_windows(
+    event_loop: &EventLoop<()>,
+    color: &Color,
+    dark: bool,
+) -> HashMap<WindowId, Window> {
+    let available_monitors = list_monitors(event_loop);
+
+    let count = if dark || available_monitors.len() < 2 {
+        available_monitors.len()
+    } else {
+        available_monitors.len() - 1
     };
 
-    if let Some(primary_monitor) = event_loop.primary_monitor() {
-        if event_loop.available_monitors().count() > 1 {
-            return event_loop
-                .available_monitors()
-                .filter_map(|monitor| {
-                    if monitor == primary_monitor {
-                        None
-                    } else {
-                        Some(build_window(monitor))
-                    }
-                })
-                .collect();
+    available_monitors
+        .into_iter()
+        .take(count)
+        .map(|monitor| build_window(event_loop, color, monitor))
+        .collect()
+}
+
+struct Color {
+    color_id: cocoa::base::id,
+    temperature: u32,
+    dark: bool,
+}
+
+impl Color {
+    fn new(dark: bool) -> Self {
+        let mut color = Self {
+            color_id: cocoa::base::nil,
+            temperature: 5500,
+            dark,
+        };
+        color.update();
+        color
+    }
+
+    fn update(&mut self) {
+        if self.dark {
+            self.color_id =
+                unsafe { NSColor::colorWithRed_green_blue_alpha_(self.color_id, 0., 0., 0., 1.) };
+        } else {
+            let (r, g, b) = tempergb::rgb_from_temperature(self.temperature).into();
+            self.color_id = unsafe {
+                NSColor::colorWithRed_green_blue_alpha_(
+                    self.color_id,
+                    f64::from(r) / 255.0,
+                    f64::from(g) / 255.0,
+                    f64::from(b) / 255.0,
+                    1.0,
+                )
+            };
         }
     }
 
-    event_loop.available_monitors().map(build_window).collect()
+    fn increase(&mut self) -> bool {
+        if self.temperature < 6600 {
+            self.temperature += 100;
+            self.update();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn toggle(&mut self) {
+        self.dark = !self.dark;
+        self.update();
+    }
+
+    fn decrease(&mut self) -> bool {
+        if self.temperature > 1500 {
+            self.temperature -= 100;
+            self.update();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn id(&self) -> cocoa::base::id {
+        self.color_id
+    }
 }
 
 #[allow(clippy::too_many_lines)]
 fn main() {
+    let dark = match std::env::args().nth(1).as_deref() {
+        Some("b" | "bright") => false,
+        Some("d" | "dark") | None => true,
+        Some(s) => {
+            eprintln!("Unrecognized parameter `{s}`. Expected `b`, `bright`, `d`, `dark`, or none");
+            std::process::exit(1);
+        }
+    };
     let mut current_modifiers = ModifiersState::default();
     let mut released_w = true;
     let mut released_q = true;
     let mut graceful = false;
-    let mut temperature = 4300;
-    let mut color = ns_color_from_temperature(temperature, cocoa::base::nil);
+    let mut color = Color::new(dark);
 
     let event_loop = EventLoop::new();
 
-    let mut windows = choose_windows(&event_loop, color);
+    let mut windows = choose_windows(&event_loop, &color, dark);
 
     nosleep::NoSleep::new()
         .unwrap()
@@ -106,19 +185,21 @@ fn main() {
                 WindowEvent::ModifiersChanged(modifiers) => {
                     current_modifiers = modifiers;
                 }
-                WindowEvent::ReceivedCharacter('=') if temperature < 6600 => {
-                    temperature += 100;
-                    color = ns_color_from_temperature(temperature, color);
+                WindowEvent::ReceivedCharacter('=') if color.increase() => {
                     windows
                         .iter()
-                        .for_each(|window| set_background_color(window.1, color));
+                        .for_each(|(_, window)| set_background_color(window, &color));
                 }
-                WindowEvent::ReceivedCharacter('-') if temperature > 1500 => {
-                    temperature -= 100;
-                    color = ns_color_from_temperature(temperature, color);
+                WindowEvent::ReceivedCharacter('-') if color.decrease() => {
                     windows
                         .iter()
-                        .for_each(|window| set_background_color(window.1, color));
+                        .for_each(|(_, window)| set_background_color(window, &color));
+                }
+                WindowEvent::ReceivedCharacter('b') => {
+                    color.toggle();
+                    windows
+                        .iter()
+                        .for_each(|(_, window)| set_background_color(window, &color));
                 }
                 WindowEvent::KeyboardInput {
                     input:
