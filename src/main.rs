@@ -7,7 +7,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     monitor::MonitorHandle,
     platform::macos::WindowExtMacOS,
-    window::{Fullscreen, Window, WindowBuilder},
+    window::{Fullscreen, Window, WindowBuilder, WindowId},
 };
 
 fn set_background_color(window: &Window, color: &Color) {
@@ -147,6 +147,15 @@ impl Color {
     }
 }
 
+fn remove(windows: &mut Vec<Window>, id: WindowId) -> bool {
+    if let Some(index) = windows.iter().position(|window| window.id() == id) {
+        windows.swap_remove(index);
+        true
+    } else {
+        false
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn main() {
     let dark = match std::env::args().nth(1).as_deref() {
@@ -192,33 +201,33 @@ fn main() {
         if let Event::WindowEvent { event, window_id } = event {
             match event {
                 WindowEvent::CloseRequested => {
-                    if let Some(index) = windows.iter().position(|window| window.id() == window_id)
-                    {
-                        windows.remove(index);
-                        if windows.is_empty() {
-                            graceful = true;
-                            *control_flow = ControlFlow::Exit;
-                        }
+                    if remove(&mut windows, window_id) && windows.is_empty() {
+                        graceful = true;
+                        *control_flow = ControlFlow::Exit;
                     }
                 }
                 WindowEvent::ModifiersChanged(modifiers) => {
                     current_modifiers = modifiers;
                 }
-                WindowEvent::ReceivedCharacter('=') if color.increase() => {
-                    windows
-                        .iter()
-                        .for_each(|window| set_background_color(window, &color));
+                WindowEvent::ReceivedCharacter('=') => {
+                    if color.increase() {
+                        for window in &windows {
+                            set_background_color(window, &color);
+                        }
+                    }
                 }
-                WindowEvent::ReceivedCharacter('-') if color.decrease() => {
-                    windows
-                        .iter()
-                        .for_each(|window| set_background_color(window, &color));
+                WindowEvent::ReceivedCharacter('-') => {
+                    if color.decrease() {
+                        for window in &windows {
+                            set_background_color(window, &color);
+                        }
+                    }
                 }
                 WindowEvent::ReceivedCharacter('b') => {
                     color.toggle();
-                    windows
-                        .iter()
-                        .for_each(|window| set_background_color(window, &color));
+                    for window in &windows {
+                        set_background_color(window, &color);
+                    }
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -230,8 +239,7 @@ fn main() {
                     ..
                 } => match (virtual_code, state) {
                     (VirtualKeyCode::Escape, ElementState::Released) => {
-                        windows.retain(|window| window.id() != window_id);
-                        if windows.is_empty() {
+                        if remove(&mut windows, window_id) && windows.is_empty() {
                             graceful = true;
                             *control_flow = ControlFlow::Exit;
                         }
@@ -254,14 +262,9 @@ fn main() {
                         if released_w && current_modifiers == ModifiersState::LOGO =>
                     {
                         released_w = false;
-                        if let Some(index) =
-                            windows.iter().position(|window| window.id() == window_id)
-                        {
-                            windows.swap_remove(index);
-                            if windows.is_empty() {
-                                graceful = true;
-                                *control_flow = ControlFlow::Exit;
-                            }
+                        if remove(&mut windows, window_id) && windows.is_empty() {
+                            graceful = true;
+                            *control_flow = ControlFlow::Exit;
                         }
                     }
                     (VirtualKeyCode::Q, ElementState::Released) => {
