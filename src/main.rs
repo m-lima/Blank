@@ -7,7 +7,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     monitor::MonitorHandle,
     platform::macos::WindowExtMacOS,
-    window::{Fullscreen, Window, WindowBuilder, WindowId},
+    window::{Window, WindowBuilder, WindowId},
 };
 
 fn set_background_color(window: &Window, color: &Color) {
@@ -35,13 +35,15 @@ fn list_monitors(event_loop: &EventLoopWindowTarget<()>) -> Vec<MonitorHandle> {
 fn build_window(
     event_loop: &EventLoopWindowTarget<()>,
     color: &Color,
-    monitor: MonitorHandle,
+    monitor: &MonitorHandle,
 ) -> Window {
     let window = WindowBuilder::new()
         .with_title("Blank")
-        .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
         .build(event_loop)
         .unwrap();
+    window.set_outer_position(monitor.position());
+    window.focus_window();
+    window.set_simple_fullscreen(true);
     set_background_color(&window, color);
     window
 }
@@ -62,7 +64,7 @@ fn choose_windows(
     available_monitors
         .into_iter()
         .take(count)
-        .map(|monitor| build_window(event_loop, color, monitor))
+        .map(|monitor| build_window(event_loop, color, &monitor))
         .collect()
 }
 
@@ -79,7 +81,7 @@ fn add_window(
                 .filter_map(Window::current_monitor)
                 .all(|open| *monitor != open)
         })
-        .map(|monitor| build_window(event_loop, color, monitor))
+        .map(|monitor| build_window(event_loop, color, &monitor))
 }
 
 struct Color {
@@ -279,10 +281,17 @@ fn main() {
                     (VirtualKeyCode::F, ElementState::Released) => {
                         if let Some(window) = windows.iter().find(|window| window.id() == window_id)
                         {
+                            let monitor = window.current_monitor();
                             if window.fullscreen().is_some() {
                                 window.set_fullscreen(None);
+                            } else if window.simple_fullscreen() {
+                                window.set_simple_fullscreen(false);
                             } else {
-                                window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                                window.set_simple_fullscreen(true);
+                            }
+                            if let Some(monitor) = monitor {
+                                window.set_outer_position(monitor.position());
+                                window.focus_window();
                             }
                         }
                     }
