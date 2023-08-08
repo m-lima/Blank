@@ -2,13 +2,12 @@
 #![warn(rust_2018_idioms)]
 
 use cocoa::appkit::{NSColor, NSWindow};
-use std::collections::HashMap;
 use winit::{
     event::{ElementState, Event, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     monitor::MonitorHandle,
     platform::macos::WindowExtMacOS,
-    window::{Fullscreen, Window, WindowBuilder, WindowId},
+    window::{Fullscreen, Window, WindowBuilder},
 };
 
 fn set_background_color(window: &Window, color: &Color) {
@@ -37,21 +36,21 @@ fn build_window(
     event_loop: &EventLoopWindowTarget<()>,
     color: &Color,
     monitor: MonitorHandle,
-) -> (WindowId, Window) {
+) -> Window {
     let window = WindowBuilder::new()
         .with_title("Blank")
         .with_fullscreen(Some(Fullscreen::Borderless(Some(monitor))))
         .build(event_loop)
         .unwrap();
     set_background_color(&window, color);
-    (window.id(), window)
+    window
 }
 
 fn choose_windows(
     event_loop: &EventLoopWindowTarget<()>,
     color: &Color,
     dark: bool,
-) -> HashMap<WindowId, Window> {
+) -> Vec<Window> {
     let available_monitors = list_monitors(event_loop);
 
     let count = if dark || available_monitors.len() < 2 {
@@ -70,13 +69,13 @@ fn choose_windows(
 fn add_window(
     event_loop: &EventLoopWindowTarget<()>,
     color: &Color,
-    current_windows: &HashMap<WindowId, Window>,
-) -> Option<(WindowId, Window)> {
+    current_windows: &[Window],
+) -> Option<Window> {
     list_monitors(event_loop)
         .into_iter()
         .find(|monitor| {
             current_windows
-                .values()
+                .iter()
                 .filter_map(Window::current_monitor)
                 .all(|open| *monitor != open)
         })
@@ -193,10 +192,13 @@ fn main() {
         if let Event::WindowEvent { event, window_id } = event {
             match event {
                 WindowEvent::CloseRequested => {
-                    windows.remove(&window_id);
-                    if windows.is_empty() {
-                        graceful = true;
-                        *control_flow = ControlFlow::Exit;
+                    if let Some(index) = windows.iter().position(|window| window.id() == window_id)
+                    {
+                        windows.remove(index);
+                        if windows.is_empty() {
+                            graceful = true;
+                            *control_flow = ControlFlow::Exit;
+                        }
                     }
                 }
                 WindowEvent::ModifiersChanged(modifiers) => {
@@ -205,18 +207,18 @@ fn main() {
                 WindowEvent::ReceivedCharacter('=') if color.increase() => {
                     windows
                         .iter()
-                        .for_each(|(_, window)| set_background_color(window, &color));
+                        .for_each(|window| set_background_color(window, &color));
                 }
                 WindowEvent::ReceivedCharacter('-') if color.decrease() => {
                     windows
                         .iter()
-                        .for_each(|(_, window)| set_background_color(window, &color));
+                        .for_each(|window| set_background_color(window, &color));
                 }
                 WindowEvent::ReceivedCharacter('b') => {
                     color.toggle();
                     windows
                         .iter()
-                        .for_each(|(_, window)| set_background_color(window, &color));
+                        .for_each(|window| set_background_color(window, &color));
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -228,7 +230,7 @@ fn main() {
                     ..
                 } => match (virtual_code, state) {
                     (VirtualKeyCode::Escape, ElementState::Released) => {
-                        windows.remove(&window_id);
+                        windows.retain(|window| window.id() != window_id);
                         if windows.is_empty() {
                             graceful = true;
                             *control_flow = ControlFlow::Exit;
@@ -242,7 +244,7 @@ fn main() {
                     {
                         released_a = false;
                         if let Some(window) = add_window(event_loop, &color, &windows) {
-                            windows.insert(window.0, window.1);
+                            windows.push(window);
                         }
                     }
                     (VirtualKeyCode::W, ElementState::Released) => {
@@ -252,10 +254,14 @@ fn main() {
                         if released_w && current_modifiers == ModifiersState::LOGO =>
                     {
                         released_w = false;
-                        windows.remove(&window_id);
-                        if windows.is_empty() {
-                            graceful = true;
-                            *control_flow = ControlFlow::Exit;
+                        if let Some(index) =
+                            windows.iter().position(|window| window.id() == window_id)
+                        {
+                            windows.swap_remove(index);
+                            if windows.is_empty() {
+                                graceful = true;
+                                *control_flow = ControlFlow::Exit;
+                            }
                         }
                     }
                     (VirtualKeyCode::Q, ElementState::Released) => {
@@ -268,7 +274,8 @@ fn main() {
                         *control_flow = ControlFlow::Exit;
                     }
                     (VirtualKeyCode::F, ElementState::Released) => {
-                        if let Some(window) = windows.get(&window_id) {
+                        if let Some(window) = windows.iter().find(|window| window.id() == window_id)
+                        {
                             if window.fullscreen().is_some() {
                                 window.set_fullscreen(None);
                             } else {
