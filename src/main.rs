@@ -1,6 +1,12 @@
 #![deny(warnings, clippy::pedantic)]
 #![warn(rust_2018_idioms)]
 
+use std::{
+    env::args,
+    process::exit,
+    time::{Duration, Instant},
+};
+
 use cocoa::appkit::{NSColor, NSWindow};
 use nosleep::NoSleepType;
 use winit::{
@@ -165,14 +171,18 @@ fn remove(windows: &mut Vec<Window>, id: WindowId) -> bool {
     }
 }
 
+fn find(windows: &[Window], id: WindowId) -> Option<&Window> {
+    windows.iter().find(|window| window.id() == id)
+}
+
 #[allow(clippy::too_many_lines)]
 fn main() {
-    let dark = match std::env::args().nth(1).as_deref() {
+    let dark = match args().nth(1).as_deref() {
         Some("b" | "bright") => false,
         Some("d" | "dark") | None => true,
         Some(s) => {
             eprintln!("Unrecognized parameter `{s}`. Expected `b`, `bright`, `d`, `dark`, or none");
-            std::process::exit(1);
+            exit(1);
         }
     };
     let mut current_modifiers = ModifiersState::default();
@@ -181,6 +191,7 @@ fn main() {
     let mut released_q = true;
     let mut graceful = false;
     let mut color = Color::new(dark);
+    let mut cursor_timer = None::<(WindowId, Instant)>;
 
     let event_loop = EventLoop::new();
 
@@ -207,8 +218,28 @@ fn main() {
         }
         *control_flow = ControlFlow::Wait;
 
+        if let Some((window_id, instant)) = cursor_timer {
+            if instant.elapsed() >= Duration::from_secs(1) {
+                cursor_timer = None;
+                if let Some(window) = find(&windows, window_id) {
+                    window.set_cursor_visible(false);
+                }
+            } else {
+                *control_flow = ControlFlow::Poll;
+            }
+        }
+
         if let Event::WindowEvent { event, window_id } = event {
             match event {
+                WindowEvent::CursorMoved { .. } => {
+                    if cursor_timer.filter(|(id, _)| *id == window_id).is_some() {
+                        cursor_timer = Some((window_id, Instant::now()));
+                    } else if let Some(window) = find(&windows, window_id) {
+                        window.focus_window();
+                        window.set_cursor_visible(true);
+                        cursor_timer = Some((window_id, Instant::now()));
+                    }
+                }
                 WindowEvent::CloseRequested => {
                     if remove(&mut windows, window_id) && windows.is_empty() {
                         graceful = true;
