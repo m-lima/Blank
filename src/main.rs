@@ -2,11 +2,12 @@
 #![warn(rust_2018_idioms)]
 
 use cocoa::appkit::{NSColor, NSWindow};
+use nosleep::NoSleepType;
 use winit::{
     event::{ElementState, Event, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
     monitor::MonitorHandle,
-    platform::macos::WindowExtMacOS,
+    platform::macos::{WindowBuilderExtMacOS, WindowExtMacOS},
     window::{Window, WindowBuilder, WindowId},
 };
 
@@ -37,12 +38,18 @@ fn build_window(
     color: &Color,
     monitor: &MonitorHandle,
 ) -> Window {
+    let scale = monitor.scale_factor();
+    let position = monitor.position().to_logical::<f64>(scale);
+    let size = monitor.size().to_logical::<f64>(scale);
     let window = WindowBuilder::new()
-        .with_title("Blank")
+        .with_title_hidden(true)
+        .with_titlebar_hidden(true)
+        .with_disallow_hidpi(true)
+        .with_position(position)
+        .with_inner_size(size)
         .build(event_loop)
         .unwrap();
-    window.set_outer_position(monitor.position());
-    window.focus_window();
+    window.set_cursor_visible(false);
     window.set_simple_fullscreen(true);
     set_background_color(&window, color);
     window
@@ -181,7 +188,7 @@ fn main() {
 
     nosleep::NoSleep::new()
         .unwrap()
-        .start(nosleep::NoSleepType::PreventUserIdleDisplaySleep)
+        .start(NoSleepType::PreventUserIdleDisplaySleep)
         .unwrap();
 
     event_loop.run(move |event, event_loop, control_flow| {
@@ -277,23 +284,6 @@ fn main() {
                     {
                         released_q = false;
                         *control_flow = ControlFlow::Exit;
-                    }
-                    (VirtualKeyCode::F, ElementState::Released) => {
-                        if let Some(window) = windows.iter().find(|window| window.id() == window_id)
-                        {
-                            let monitor = window.current_monitor();
-                            if window.fullscreen().is_some() {
-                                window.set_fullscreen(None);
-                            } else if window.simple_fullscreen() {
-                                window.set_simple_fullscreen(false);
-                            } else {
-                                window.set_simple_fullscreen(true);
-                            }
-                            if let Some(monitor) = monitor {
-                                window.set_outer_position(monitor.position());
-                                window.focus_window();
-                            }
-                        }
                     }
                     _ => (),
                 },
