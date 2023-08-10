@@ -196,6 +196,10 @@ fn main() {
     let event_loop = EventLoop::new();
 
     let mut windows = choose_windows(&event_loop, &color, dark);
+    if windows.is_empty() {
+        eprintln!("No windows could be built");
+        exit(1);
+    }
 
     nosleep::NoSleep::new()
         .unwrap()
