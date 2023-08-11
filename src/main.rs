@@ -162,17 +162,34 @@ impl Color {
     }
 }
 
-fn remove(windows: &mut Vec<Window>, id: WindowId) -> bool {
-    if let Some(index) = windows.iter().position(|window| window.id() == id) {
-        windows.swap_remove(index);
-        true
-    } else {
-        false
+trait VecAccessor {
+    fn delete(&mut self, id: WindowId) -> bool;
+    fn find(&self, id: WindowId) -> Option<&Window>;
+}
+
+impl VecAccessor for Vec<Window> {
+    fn delete(&mut self, id: WindowId) -> bool {
+        if let Some(index) = self.iter().position(|window| window.id() == id) {
+            self.swap_remove(index);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn find(&self, id: WindowId) -> Option<&Window> {
+        self.iter().find(|window| window.id() == id)
     }
 }
 
-fn find(windows: &[Window], id: WindowId) -> Option<&Window> {
-    windows.iter().find(|window| window.id() == id)
+trait OptionAccessor {
+    fn contains(&self, window_id: WindowId) -> bool;
+}
+
+impl OptionAccessor for Option<WindowId> {
+    fn contains(&self, window_id: WindowId) -> bool {
+        self.map_or(false, |id| id == window_id)
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -192,6 +209,7 @@ fn main() {
     let mut graceful = false;
     let mut color = Color::new(dark);
     let mut cursor_timer = None::<(WindowId, Instant)>;
+    let mut focus = None::<WindowId>;
 
     let event_loop = EventLoop::new();
 
@@ -225,7 +243,7 @@ fn main() {
         if let Some((window_id, instant)) = cursor_timer {
             if instant.elapsed() >= Duration::from_secs(1) {
                 cursor_timer = None;
-                if let Some(window) = find(&windows, window_id) {
+                if let Some(window) = windows.find(window_id) {
                     window.set_cursor_visible(false);
                 }
             } else {
@@ -235,17 +253,30 @@ fn main() {
 
         if let Event::WindowEvent { event, window_id } = event {
             match event {
+                WindowEvent::Focused(has_focus) => {
+                    if has_focus {
+                        focus = Some(window_id);
+                        if let Some(window) = windows.find(window_id) {
+                            window.set_cursor_visible(false);
+                            cursor_timer = None;
+                        }
+                    } else if focus.contains(window_id) {
+                        focus = None;
+                    }
+                }
                 WindowEvent::CursorMoved { .. } => {
-                    if cursor_timer.filter(|(id, _)| *id == window_id).is_some() {
-                        cursor_timer = Some((window_id, Instant::now()));
-                    } else if let Some(window) = find(&windows, window_id) {
-                        window.focus_window();
-                        window.set_cursor_visible(true);
-                        cursor_timer = Some((window_id, Instant::now()));
+                    if focus.is_some() {
+                        if cursor_timer.map(|(id, _)| id).contains(window_id) {
+                            cursor_timer = Some((window_id, Instant::now()));
+                        } else if let Some(window) = windows.find(window_id) {
+                            window.focus_window();
+                            window.set_cursor_visible(true);
+                            cursor_timer = Some((window_id, Instant::now()));
+                        }
                     }
                 }
                 WindowEvent::CloseRequested => {
-                    if remove(&mut windows, window_id) && windows.is_empty() {
+                    if windows.delete(window_id) && windows.is_empty() {
                         graceful = true;
                         *control_flow = ControlFlow::Exit;
                     }
@@ -283,7 +314,7 @@ fn main() {
                     ..
                 } => match (virtual_code, state) {
                     (VirtualKeyCode::Escape, ElementState::Released) => {
-                        if remove(&mut windows, window_id) && windows.is_empty() {
+                        if windows.delete(window_id) && windows.is_empty() {
                             graceful = true;
                             *control_flow = ControlFlow::Exit;
                         }
@@ -306,7 +337,7 @@ fn main() {
                         if released_w && current_modifiers == ModifiersState::LOGO =>
                     {
                         released_w = false;
-                        if remove(&mut windows, window_id) && windows.is_empty() {
+                        if windows.delete(window_id) && windows.is_empty() {
                             graceful = true;
                             *control_flow = ControlFlow::Exit;
                         }
