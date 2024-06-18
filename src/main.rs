@@ -98,7 +98,7 @@ fn add_window(
 }
 
 struct Color {
-    color_id: cocoa::base::id,
+    id: cocoa::base::id,
     temperature: u32,
     dark: bool,
 }
@@ -106,7 +106,7 @@ struct Color {
 impl Color {
     fn new(dark: bool) -> Self {
         let mut color = Self {
-            color_id: cocoa::base::nil,
+            id: cocoa::base::nil,
             temperature: 5500,
             dark,
         };
@@ -116,13 +116,12 @@ impl Color {
 
     fn update(&mut self) {
         if self.dark {
-            self.color_id =
-                unsafe { NSColor::colorWithRed_green_blue_alpha_(self.color_id, 0., 0., 0., 1.) };
+            self.id = unsafe { NSColor::colorWithRed_green_blue_alpha_(self.id, 0., 0., 0., 1.) };
         } else {
             let (r, g, b) = tempergb::rgb_from_temperature(self.temperature).into();
-            self.color_id = unsafe {
+            self.id = unsafe {
                 NSColor::colorWithRed_green_blue_alpha_(
-                    self.color_id,
+                    self.id,
                     f64::from(r) / 255.0,
                     f64::from(g) / 255.0,
                     f64::from(b) / 255.0,
@@ -158,7 +157,7 @@ impl Color {
     }
 
     fn id(&self) -> cocoa::base::id {
-        self.color_id
+        self.id
     }
 }
 
